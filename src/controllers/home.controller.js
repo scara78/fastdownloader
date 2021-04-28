@@ -14,7 +14,7 @@ const fs = require('fs');
 const downloadHlsNode = require("node-hls-downloader").download;
 const puppeteer = require('puppeteer-extra');
 const got = require('got');
-const fbvid = require('fbvideos');
+// const fbvid = require('fbvideos');
 const axios = require('axios');
 const tiktokSearch = require('tiktok-search');
 const converter = require("node-m3u8-to-mp4");
@@ -32,21 +32,25 @@ const vidl = require('vimeo-downloader');
 // create using puppeteer.
 const AdblockerPlugin = require('puppeteer-extra-plugin-adblocker')
 puppeteer.use(AdblockerPlugin());
-const RecaptchaPlugin = require('puppeteer-extra-plugin-recaptcha')
-puppeteer.use(
-  RecaptchaPlugin({
-    provider: {
-      id: '2captcha',
-      token: process.env.TOKEN_RECAPTCHA, // REPLACE THIS WITH YOUR OWN 2CAPTCHA API KEY ⚡
-    },
-    visualFeedback: true, // colorize reCAPTCHAs (violet = detected, green = solved)
-  })
-);
-const StealthPlugin = require('puppeteer-extra-plugin-stealth')
-puppeteer.use(StealthPlugin());
-const tvd = require('twitter-video-downloader');
+// const RecaptchaPlugin = require('puppeteer-extra-plugin-recaptcha')
+// puppeteer.use(
+//   RecaptchaPlugin({
+//     provider: {
+//       id: '2captcha',
+//       token: process.env.TOKEN_RECAPTCHA, // REPLACE THIS WITH YOUR OWN 2CAPTCHA API KEY ⚡
+//     },
+//     visualFeedback: true, // colorize reCAPTCHAs (violet = detected, green = solved)
+//   })
+// );
+// const StealthPlugin = require('puppeteer-extra-plugin-stealth')
+// puppeteer.use(StealthPlugin());
+// const tvd = require('twitter-video-downloader');
+
+// AUX SCRAPPING PROXY
+// http-proxy-middleware
 
 const randomUseragent = require('random-useragent');
+const youtubedl = require('youtube-dl');
 
 ctrl.index = (req, res) => {
   res.render('index');
@@ -259,8 +263,10 @@ ctrl.download = async (req, res) => {
       });
      }
     //  await getInstaVideo(url);
-     let newUrl = createNewUrl(url);
-     let metaData = await downloadMetaData(newUrl);
+     let dataUrl = await forceDownloadInstagram(url);
+     let enlace = dataUrl.playlist[0].id;
+    //  let newUrl = createNewUrl(url);
+    //  let metaData = await downloadMetaData(newUrl);
     //  console.log(metaData);
     //  const getType = getMediaType(metaData);
     //  if(getType == "image") {
@@ -291,21 +297,22 @@ ctrl.download = async (req, res) => {
     //   });
     //  }
     // console.log(metaData);
-    if(!metaData) {
-      return res.json({
-        data: [],
-        enlacesActive: true
-      });
-    } else {
+    // if(!metaData) {
+    //   return res.json({
+    //     data: [],
+    //     enlacesActive: true
+    //   });
+    // }
+    //  else {
       res.json({
         data: [{
-          url: `${metaData}&dl=1`,
+          url: enlace,
           quality: 'HD',
           type: 'MP4'
         }],
         enlacesActive: true
       });
-    }
+    // }
     
     //  console.log(metaData);
   } else if(server == 'tiktok') {
@@ -533,7 +540,15 @@ ctrl.youtubeDownload = async (req, res) => {
 ctrl.youtube = (req, res) => {
   let url = req.query.url;
   res.setHeader('content-disposition', `attachment; filename=${req.query.name}.mp4`);
-  ytdl(url, {format: 'mp4'}).pipe(res);
+  const video = youtubedl(url, ['--format=18']);
+  video.on('info', function(info) {
+    console.log('Download started')
+    console.log('filename: ' + info._filename)
+    console.log('size: ' + info.size)
+    res.setHeader('content-length', info.size);
+  });
+  video.pipe(res);
+  // ytdl(url, {format: 'mp4'}).pipe(res);
 }
 
 ctrl.uqload = (req, res) => {
@@ -613,6 +628,29 @@ ctrl.videos = async (req, res) => {
 ctrl.mystream = (req, res) => {
   let url = req.query.url;
   res.redirect(url);
+  // res.setHeader('content-disposition', `attachment; filename=${req.query.name.replace('—', '')}.mp4`);
+  // https.get(url, {
+  //   headers: {
+  //     'accept': '*/*',
+  //     'accept-encoding': 'identity;q=1, *;q=0',
+  //     'accept-language': 'es-Es,es;q=0.9,en;q=0.8',
+  //     'cache-control': 'no-cache',
+  //     'pragma': 'no-cache',
+  //     'referer': url,
+  //     'host': 'fvis0foohy.mscontent.net',
+  //     'sec-ch-ua': `" Not A;Brand";v="99", "Chromium";v="90", "Google Chrome";v="90"`,
+  //     'sec-ch-ua-mobile': '?0',
+  //     'sec-fetch-dest': 'video',
+  //     'sec-fetch-mode': 'no-cors',
+  //     'sec-fetch-site': 'same-origin',
+  //     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36'
+  //   }
+  // }, function(file) {
+  //   if(file.headers['content-length']) {
+  //     res.setHeader('content-length', file.headers['content-length']);
+  //   }
+  //   file.pipe(res);
+  // });
 }
 
 ctrl.doodstream = (req, res) => {
@@ -948,11 +986,18 @@ async function getUrlMyStream(url) {
 }
 
 async function getDoodStreamUrl(url) {
+  // url = url.replace('/e/', '/d/');
   const browser = await puppeteer.launch({ headless: true,args: ['--no-sandbox','--disable-setuid-sandbox'] });
   const page = await browser.newPage();
   await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.85 Safari/537.36');
   await page.setDefaultNavigationTimeout(0); 
   await page.goto(url, {waitUntil: 'load', timeout: 0});
+  const pages = await browser.pages(); // get all open pages by the browser
+  const popup = pages[pages.length - 1];
+  // console.log(popup);
+  if(popup !== page) {
+    await popup.close();
+  }
   // await page.click('#video_player > button > span');
   // await page.waitForSelector('[title="reCAPTCHA"]');
   // await Promise.all([
@@ -1088,6 +1133,30 @@ function createNewUrl(oriUrl) {
     oriUrl += "/";
   }
   return oriUrl + "?__a=1";
+}
+
+async function forceDownloadInstagram(url) {
+  let response = await fetch(`https://server10.workerserverbl.com/online/PreDownload.php?url=${url}&format=MP4&quality=sd&statBeh=0&speed=d2ed4fb2aeaf49b147c74f217c82045e`, {
+    headers: {
+      'Accept': '*/*',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Host': 'server10.workerserverbl.com',
+      'Origin': 'https://www.downloadvideosfrom.com',
+      'Pragma': 'no-cache',
+      'Referer': 'https://www.downloadvideosfrom.com/',
+      'sec-ch-ua': `" Not A;Brand";v="99", "Chromium";v="90", "Google Chrome";v="90"`,
+      'sec-ch-ua-mobile': '?1',
+      'Sec-Fetch-Dest': 'empty',
+      'Sec-Fetch-Mode': 'cors',
+      'Sec-Fetch-Site': 'cross-site',
+      'User-Agent': 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Mobile Safari/537.36'
+    }
+  });
+  let res = await response.json();
+  return res;
 }
 
 async function downloadMetaData(url) {

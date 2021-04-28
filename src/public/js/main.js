@@ -394,3 +394,5 @@ async function executeScriptEnlaces(url) {
   });
   return enlaces;
 }
+
+$('.loader-page-content').addClass('d-none');
